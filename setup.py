@@ -39,6 +39,7 @@ entry_points = {
         'less = ckan.lib.cli:LessCommand',
         'datastore = ckanext.datastore.commands:SetupDatastoreCommand',
         'front-end-build = ckan.lib.cli:FrontEndBuildCommand',
+        'taxonomy = ckanext.taxonomy.commands:TaxonomyCommand',
     ],
     'console_scripts': [
         'ckan-admin = bin.ckan_admin:Command',
@@ -79,6 +80,7 @@ entry_points = {
         'example_iauthfunctions_v2 = ckanext.example_iauthfunctions.plugin_v2:ExampleIAuthFunctionsPlugin',
         'example_iauthfunctions_v3 = ckanext.example_iauthfunctions.plugin_v3:ExampleIAuthFunctionsPlugin',
         'example_iauthfunctions = ckanext.example_iauthfunctions.plugin:ExampleIAuthFunctionsPlugin',
+        'taxonomy = ckanext.taxonomy.plugin:TaxonomyPlugin',
     ],
     'ckan.system_plugins': [
         'domain_object_mods = ckan.model.modification:DomainObjectModificationExtension',
