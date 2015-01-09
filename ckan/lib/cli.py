@@ -125,7 +125,7 @@ class ManageDb(CkanCommand):
     db create                      - alias of db upgrade
     db init                        - create and put in default data
     db clean
-    db upgrade [version no.]       - Data migrate
+    db upgrade                     - Data migrate
     db version                     - returns current version of data schema
     db dump FILE_PATH              - dump to a pg_dump file
     db dump-rdf DATASET_NAME FILE_PATH
@@ -169,10 +169,8 @@ class ManageDb(CkanCommand):
             if self.verbose:
                 print 'Cleaning DB: SUCCESS'
         elif cmd == 'upgrade':
-            if len(self.args) > 1:
-                model.repo.upgrade_db(self.args[1])
-            else:
-                model.repo.upgrade_db()
+            assert not len(self.args) > 1, 'Too many arguments'
+            model.core_ckan_tables.upgrade_db()
         elif cmd == 'version':
             self.version()
         elif cmd == 'dump':
@@ -243,6 +241,14 @@ class ManageDb(CkanCommand):
         if retcode != 0:
             raise SystemError('Command exited with errorcode: %i' % retcode)
 
+    def db_upgrade(self):
+        print 'Upgrading DB'
+        import ckan.model as model
+        from ckan.plugins.migration import get_plugin_migration_tables
+        model.core_ckan_tables.upgrade_db()
+        for migration_tables in get_plugin_migration_tables():
+            migration_tables.upgrade_db()
+
     def dump(self):
         if len(self.args) < 2:
             print 'Need pg_dump filepath'
@@ -261,9 +267,7 @@ class ManageDb(CkanCommand):
         psql_cmd = self._get_psql_cmd() + ' -f %s'
         pg_cmd = self._postgres_load(dump_path)
         if not only_load:
-            print 'Upgrading DB'
-            import ckan.model as model
-            model.repo.upgrade_db()
+            self.db_upgrade()
 
             print 'Rebuilding search index'
             import ckan.lib.search

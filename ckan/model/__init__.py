@@ -159,7 +159,6 @@ import ckan.migration
 log = logging.getLogger(__name__)
 
 
-
 # set up in init_model after metadata is bound
 version_table = None
 
@@ -180,8 +179,76 @@ def init_model(engine):
         pass
 
 
+class MigratableTables(object):
+    '''Represents a collection of database tables their schema (table
+    definition) 'versioned'. The schema can be upgrade/migrated using SQL
+    scripts to a later version. This allows each release of CKAN or CKAN
+    extension to change the schema for the tables that they control.
+    '''
+    def __init__(self, metadata, migrate_directory_path, name):
+        self.metadata = metadata
+        self.migrate_repository = migrate_directory_path
+        self.name = name
+
+    def latest_migration_version(self):
+        import migrate.versioning.api as mig
+        version = mig.version(self.migrate_repository)
+        return version
+
+    def setup_migration_version_control(self, version=None):
+        import migrate.exceptions
+        import migrate.versioning.api as mig
+        # set up db version control (if not already)
+        try:
+            mig.version_control(self.metadata.bind,
+                    self.migrate_repository, version)
+        except migrate.exceptions.DatabaseAlreadyControlledError:
+            pass
+
+    def check_db_version(self):
+        import migrate.versioning.api as mig
+        current_version = mig.db_version(self.metadata.bind, self.migrate_repository)
+        return current_version, self.latest_migration_version()
+
+    def assert_db_is_up_to_date(self):
+        current_version, latest_version = self.check_db_version()
+        assert current_version == latest_version, \
+            '%s database schema is out of step with the CKAN code (%s vs %s) '\
+            '- run "paster db upgrade" before use' \
+            % (self.name, current_version, latest_version)
+
+    def upgrade_db(self, version=None):
+        '''Upgrade db using sqlalchemy migrations.
+
+        @param version: version to upgrade to (if None upgrade to latest)
+        '''
+        assert meta.engine.name in ('postgres', 'postgresql'), \
+            'Database migration - only Postgresql engine supported (not %s).' \
+            % meta.engine.name
+        import migrate.versioning.api as mig
+        self.setup_migration_version_control()
+        version_before = mig.db_version(self.metadata.bind, self.migrate_repository)
+        mig.upgrade(self.metadata.bind, self.migrate_repository, version=version)
+        version_after = mig.db_version(self.metadata.bind, self.migrate_repository)
+        if version_after != version_before:
+            log.info('%s database version upgraded: %s -> %s',
+                     self.name, version_before, version_after)
+        else:
+            log.info('%s database version remains as: %s',
+                     self.name, version_after)
+
+        repo.init_const_data()
+
+        ##this prints the diffs in a readable format
+        ##import pprint
+        ##from migrate.versioning.schemadiff import getDiffOfModelAgainstDatabase
+        ##pprint.pprint(getDiffOfModelAgainstDatabase(self.metadata, self.metadata.bind).colDiffs)
+
+core_ckan_tables = MigratableTables(meta.metadata,
+                                    ckan.migration.__path__[0], 'Core CKAN')
+
+
 class Repository(vdm.sqlalchemy.Repository):
-    migrate_repository = ckan.migration.__path__[0]
 
     # note: tables_created value is not sustained between instantiations
     #       so only useful for tests. The alternative is to use
@@ -206,7 +273,7 @@ class Repository(vdm.sqlalchemy.Repository):
             self.create_db()
         else:
             if not self.tables_created_and_initialised:
-                self.upgrade_db()
+                core_ckan_tables.upgrade_db()
                 ## make sure celery tables are made as celery only makes
                 ## them after adding a task
                 try:
@@ -269,11 +336,6 @@ class Repository(vdm.sqlalchemy.Repository):
         self.tables_created_and_initialised = True
         log.info('Database tables created')
 
-    def latest_migration_version(self):
-        import migrate.versioning.api as mig
-        version = mig.version(self.migrate_repository)
-        return version
-
     def rebuild_db(self):
         '''Clean and init the db'''
         if self.tables_created_and_initialised:
@@ -304,41 +366,6 @@ class Repository(vdm.sqlalchemy.Repository):
             connection.execute('delete from "%s"' % table.name)
         self.session.commit()
         log.info('Database table data deleted')
-
-    def setup_migration_version_control(self, version=None):
-        import migrate.exceptions
-        import migrate.versioning.api as mig
-        # set up db version control (if not already)
-        try:
-            mig.version_control(self.metadata.bind,
-                    self.migrate_repository, version)
-        except migrate.exceptions.DatabaseAlreadyControlledError:
-            pass
-
-    def upgrade_db(self, version=None):
-        '''Upgrade db using sqlalchemy migrations.
-
-        @param version: version to upgrade to (if None upgrade to latest)
-        '''
-        assert meta.engine.name in ('postgres', 'postgresql'), \
-            'Database migration - only Postgresql engine supported (not %s).' \
-                % meta.engine.name
-        import migrate.versioning.api as mig
-        self.setup_migration_version_control()
-        version_before = mig.db_version(self.metadata.bind, self.migrate_repository)
-        mig.upgrade(self.metadata.bind, self.migrate_repository, version=version)
-        version_after = mig.db_version(self.metadata.bind, self.migrate_repository)
-        if version_after != version_before:
-            log.info('CKAN database version upgraded: %s -> %s', version_before, version_after)
-        else:
-            log.info('CKAN database version remains as: %s', version_after)
-
-        self.init_const_data()
-
-        ##this prints the diffs in a readable format
-        ##import pprint
-        ##from migrate.versioning.schemadiff import getDiffOfModelAgainstDatabase
-        ##pprint.pprint(getDiffOfModelAgainstDatabase(self.metadata, self.metadata.bind).colDiffs)
 
     def are_tables_created(self):
         meta.metadata = MetaData(self.metadata.bind)
