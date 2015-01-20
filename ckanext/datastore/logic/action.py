@@ -74,6 +74,9 @@ def datastore_create(context, data_dict):
     if errors:
         raise p.toolkit.ValidationError(errors)
 
+    if not data_dict['resource'].get('format'):
+        data_dict['resource']['format'] = 'API'
+
     p.toolkit.check_access('datastore_create', context, data_dict)
 
     if 'resource' in data_dict and 'resource_id' in data_dict:
@@ -90,8 +93,10 @@ def datastore_create(context, data_dict):
         has_url = 'url' in data_dict['resource']
         # A datastore only resource does not have a url in the db
         data_dict['resource'].setdefault('url', '_datastore_only_resource')
+
         res = p.toolkit.get_action('resource_create')(context,
                                                       data_dict['resource'])
+
         data_dict['resource_id'] = res['id']
 
         # create resource from file
@@ -111,6 +116,9 @@ def datastore_create(context, data_dict):
         else:
             # no need to set the full url because it will be set in before_show
             res['url_type'] = 'datastore'
+            if not res.get('description'):
+                res['description'] = "API resource"
+
             p.toolkit.get_action('resource_update')(context, res)
     else:
         _check_read_only(context, data_dict)
