@@ -233,6 +233,7 @@ class DatastorePlugin(p.SingletonPlugin):
                    'datastore_upsert': action.datastore_upsert,
                    'datastore_delete': action.datastore_delete,
                    'datastore_search': action.datastore_search,
+                   'datastore_info': action.datastore_info,
                   }
         if not self.legacy_mode:
             actions.update({
@@ -247,6 +248,7 @@ class DatastorePlugin(p.SingletonPlugin):
                 'datastore_delete': auth.datastore_delete,
                 'datastore_search': auth.datastore_search,
                 'datastore_search_sql': auth.datastore_search_sql,
+                'datastore_info': auth.datastore_info,
                 'datastore_change_permissions': auth.datastore_change_permissions}
 
     def before_map(self, m):

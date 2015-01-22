@@ -97,9 +97,18 @@ class DatapusherPlugin(p.SingletonPlugin):
                 package = p.toolkit.get_action('package_show')(context, {
                     'id': entity.get_package_id()
                 })
+                # We only want to push this request to the datapusher
+                # where the resource is in the NII.
+                if package.get('core-dataset', '') != 'true':
+                    log.debug("Ignoring resource from non-NII dataset {}".format(package['name']))
+                    return
+
+                log.debug("Processing resource from NII dataset {}".format(package['name']))
+
                 if (not package['private'] and entity.format and
                         entity.format.lower() in self.datapusher_formats and
                         entity.url_type != 'datapusher'):
+
                     try:
                         p.toolkit.get_action('datapusher_submit')(context, {
                             'resource_id': entity.id

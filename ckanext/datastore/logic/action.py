@@ -74,7 +74,7 @@ def datastore_create(context, data_dict):
     if errors:
         raise p.toolkit.ValidationError(errors)
 
-    if not data_dict['resource'].get('format'):
+    if 'resource' in data_dict and not data_dict['resource'].get('format'):
         data_dict['resource']['format'] = 'API'
 
     p.toolkit.check_access('datastore_create', context, data_dict)
@@ -396,6 +396,67 @@ def datastore_search_sql(context, data_dict):
     result.pop('id', None)
     result.pop('connection_url')
     return result
+
+
+def _type_lookup(t):
+    if t in ['numeric']:
+        return 'number'
+
+    if t.startswith('timestamp'):
+        return "date"
+
+    return "text"
+
+def datastore_info(context, data_dict):
+    '''
+    Returns information about the data imported, such as column names
+    and types determined from how it was imported.
+
+    :rtype: A dictionary describing the columns and their types.
+    :param id: Id of the resource we want info about
+    :type id: A UUID
+    '''
+    p.toolkit.check_access('datastore_info', context, data_dict)
+
+    resource_id = _get_or_bust(data_dict, 'id')
+    resource = p.toolkit.get_action('resource_show')(context, {'id':resource_id})
+
+    # TODO: Check resource has datastore_active set.
+    print resource
+
+    data_dict['connection_url'] = pylons.config['ckan.datastore.read_url']
+
+    info = {'schema': {}, 'meta': {}}
+
+    schema_results = None
+    meta_results = None
+    try:
+        schema_sql = sqlalchemy.text(u'''
+            SELECT column_name, data_type
+            FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = :resource_id;
+        ''')
+        schema_results = db._get_engine(data_dict).execute(schema_sql, resource_id=resource_id)
+        for row in schema_results.fetchall():
+            k = row[0]
+            v = row[1]
+            if k.startswith('_'):  # Skip internal rows
+                continue
+            info['schema'][k] = _type_lookup(v)
+
+        # We need to make sure the resource_id is a valid resource_id before we use it like
+        # this, we have done that above.
+        meta_sql = sqlalchemy.text(u'''
+            SELECT count(_id) FROM "{}";
+        '''.format(resource_id))
+        meta_results = db._get_engine(data_dict).execute(meta_sql, resource_id=resource_id)
+        info['meta']['count'] = meta_results.fetchone()[0]
+    finally:
+        if schema_results:
+            schema_results.close()
+        if meta_results:
+            meta_results.close()
+
+    return info
 
 
 def datastore_make_private(context, data_dict):
