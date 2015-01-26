@@ -24,6 +24,14 @@ class ResourceDataController(base.BaseController):
 
     def resource_data(self, id, resource_id):
 
+        # DGU: We only want sysadmins to be able to view the status and resubmit.
+        if not toolkit.c.user:
+            base.abort(403)
+
+        user = model.User.get(toolkit.c.user)
+        if not user or not user.sysadmin:
+            base.abort(403)
+
         if toolkit.request.method == 'POST':
             try:
                 toolkit.c.pkg_dict = p.toolkit.get_action('datapusher_submit')(
