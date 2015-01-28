@@ -1455,7 +1455,8 @@ class Celery(CkanCommand):
 
     def run_(self):
         assert self.options.queue, 'Please specifiy a --queue from: %r' % self.queues.keys()
-        os.environ['CKAN_CONFIG'] = os.path.abspath(self.options.config)
+        config_filepath = self._get_config()['__file__']
+        os.environ['CKAN_CONFIG'] = os.path.abspath(config_filepath)
         from ckan.lib.celery_app import celery
         celery_args = []
         if len(self.args) == 2 and self.args[1].startswith('concurrency='):
